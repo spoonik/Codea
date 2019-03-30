@@ -1,0 +1,499 @@
+卓球スコアアプリのソース
+
+
+■1
+
+卓球ソース1
+--enter team count and team names
+teamcount=8
+teamName = {
+        "山中",
+        "藤井広瀬",
+        "あち",
+        "金田",
+        "父さん",
+        "うー",
+        "ドダイ",
+        "鬼の一転",
+        "蟹工船",
+        "先輩",
+        "ネズミ",
+        "羊",
+        "ムササビ",
+        "ロペス",
+}
+
+--limitation:
+--   input '0' by slider once up and down
+
+
+■2
+
+卓球ソース2
+-- Use this function to perform your initial setup
+function setup()
+    pattern = {}
+    teama, teamb = 0, 0
+    -- fill the patterns with empties to initialize
+    for i = 1, teamcount do
+        pattern[i] = {}
+        for j = 1, teamcount do
+            pattern[i][j] = false
+        end
+    end
+    
+    parameter.integer("set1a",0,15,0,function(x) updateScore(teama,teamb,1,teama,set1a) end)
+    parameter.integer("set1b",0,15,0,function(x) updateScore(teama,teamb,1,teamb,set1b) end)
+    parameter.integer("set2a",0,15,0,function(x) updateScore(teama,teamb,2,teama,set2a) end)
+    parameter.integer("set2b",0,15,0,function(x) updateScore(teama,teamb,2,teamb,set2b) end)
+    parameter.integer("set3a",0,5,0,function(x) updateScore(teama,teamb,3,teama,set3a) end)
+    parameter.integer("set3b",0,5,0,function(x) updateScore(teama,teamb,3,teamb,set3b) end)
+    parameter.action("Total",function() sumUp() end)
+    parameter.action("5 tap to clear",function() ResetData() end)
+    
+    --recover saved data
+    loadScores(teamcount)
+end
+
+-- This function gets called once every frame
+function draw()
+    background(0,0,0,255)
+    local w = WIDTH / (teamcount+1)
+    local h = HEIGHT / (teamcount+1)
+    
+    -- text format
+    font("HelveticaNeue-CondensedBlack")
+    textWrapWidth(w)
+    textAlign(CENTER)
+    
+    for i=1,teamcount+1 do
+        for j=1,teamcount+1 do
+            x, y = (j-1)*w, (teamcount-i+1)*h
+            noStroke();
+            if i==1 or j==1 then
+                fill(106, 173, 227, 255)
+            elseif pattern[i-1][j-1] then
+                fill(230, 197, 75, 255)
+            elseif i==j then
+                fill(127, 127, 141, 255)
+            else
+                if i<j then
+                    fill(216, 216, 216, 255)
+                else
+                    fill(176, 176, 176, 255)
+                end
+            end
+            rect(x, y, w, h)
+            
+            if i~=1 and j~=1 and j~=i then
+                winInfo = getWinSetCnt(i-1,j-1,3)
+                if winInfo[1]>=2 then 
+                    fill(56, 56, 252, 255)
+                elseif winInfo[1]<winInfo[2]/2 then
+                    fill(252, 31, 48, 255)
+                else
+                    fill(29, 188, 57, 255)
+                end
+                fontSize(40)
+                text(winInfo[1], x+w/5, y+h/2)
+                fontSize(18)
+                text(getSetScoreStr(i-1,j-1,"\n"), x+w*2/3, y+h/2)
+            elseif i==1 and j~=1 then
+                fill(255, 255, 255, 255)
+                fontSize(22)
+                text(getTeamName(j-1), x+w/2, y+h/2)
+            elseif j==1 and i~=1 then
+                fill(255, 255, 255, 255)
+                fontSize(22)
+                text(getTeamName(i-1), x+w/2, y+h/2)
+            end
+        end
+    end
+    --Sum display
+    displaySumUp()
+    
+    --tap selection handling
+    if CurrentTouch.state == BEGAN and not touchHandled then
+        touchHandled = true
+        checkFingerDown(CurrentTouch.x, CurrentTouch.y)
+    elseif CurrentTouch.state == ENDED then
+        touchHandled = false
+    end
+end
+
+function checkFingerDown(x, y)
+    teama = 0
+    teamb = 0
+    
+    -- clear flags
+    for i=0,teamcount-1,1 do
+        for j=0,teamcount-1,1 do
+            pattern[i+1][j+1] = false
+        end
+    end
+    
+    -- convert the finger to the grid location
+    print(x,y)
+    x = math.floor(x/WIDTH*(teamcount+1))
+    y = math.floor((HEIGHT-y)/HEIGHT*(teamcount+1))
+    if x<=0 or y<=0 then return end
+    
+    if pattern[y][x] then
+        pattern[y][x] = false
+    elseif x~=y and x>y then
+        pattern[y][x] = true
+        teama = y
+        teamb = x
+    end
+    
+    --re-display the selected cell's scores on param area
+    refreshParams()
+end
+
+function refreshParams()
+    print("a"..teama)
+    --get and insert scores to param sliders
+    set1a = getScore(teama,teamb,1,teama)
+    set1b = getScore(teama,teamb,1,teamb)
+    set2a = getScore(teama,teamb,2,teama)
+    set2b = getScore(teama,teamb,2,teamb)
+    set3a = getScore(teama,teamb,3,teama)
+    set3b = getScore(teama,teamb,3,teamb)
+    
+    --reset Reset function button
+    ResetResetPushCount()
+    --clear sum calculation display
+    HideSumUp()
+end
+
+
+--control the Reset button behavior
+--when user pushes Reset 5times sequencially, the saved scores are discarded.
+--if other input is inserted between those push, resetCount is reset.
+resetCount = 0
+function ResetData()
+    resetCount = resetCount + 1
+    if resetCount > 4 then
+        clearLocalData()
+        resetCount = 0
+        loadScores(teamcount)
+        return true
+    end
+    return false
+end
+function ResetResetPushCount()
+    resetCount = 0
+end
+
+
+■3
+
+卓球ソース3
+scores = {}
+
+--reflect selected cell param to scoreDB
+function updateScore(teama,teamb,set,whichteam,score)
+    if teama==0 or teamb==0 or teamb==teama then return end
+    if teama < teamb then
+        scores[getTeamId(teama)..getTeamId(teamb)..set..getTeamId(whichteam)] = score
+        saveLocalData(getTeamId(teama)..getTeamId(teamb)..set..getTeamId(whichteam), score)
+    end
+end
+
+function getScore(teama,teamb,set,whichteam)
+    if teama==nil or teamb==nil then return nil end
+    if teama==0 or teamb==0 then return 0 end
+    return scores[getTeamId(teama)..getTeamId(teamb)..set..getTeamId(whichteam)]
+end
+
+--count win set count of a pair of 2teams, considering set count (2 or 3)
+-- return value is array;
+--   1: win set count
+--   2: total set count
+function getWinSetCnt(i,j,includeSet)
+    reverse = i>j
+    retval = 0
+    totalSet = 0
+    retInfo = {}
+    
+    if reverse then
+        tmp=i
+        i=j
+        j=tmp
+    end
+    
+    tmp1a = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(i)]
+    tmp1b = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(j)]
+    tmp2a = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(i)]
+    tmp2b = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(j)]
+    tmp3a = scores[getTeamId(i)..getTeamId(j).."3"..getTeamId(i)]
+    tmp3b = scores[getTeamId(i)..getTeamId(j).."3"..getTeamId(j)]
+    
+    if tmp1a~=nil and tmp1b~=nil and includeSet>=1 then
+        totalSet = totalSet + 1
+        if reverse==false and tmp1a > tmp1b then
+            retval = retval + 1
+        elseif reverse and tmp1a<tmp1b then
+            retval = retval + 1
+        end
+    end
+    if tmp2a~=nil and tmp2b~=nil and includeSet>=2 then
+        totalSet = totalSet + 1
+        if reverse==false and tmp2a > tmp2b then
+            retval = retval + 1
+        elseif reverse and tmp2a<tmp2b then
+            retval = retval + 1
+        end
+    end
+    if tmp3a~=nil and tmp3b~=nil and includeSet>=3 then
+        totalSet = totalSet + 1
+        if reverse==false and tmp3a > tmp3b then
+            retval = retval + 1
+        elseif reverse and tmp3a<tmp3b then
+            retval = retval + 1
+        end
+    end
+    
+    retInfo[1] = retval
+    retInfo[2] = totalSet
+    return retInfo
+end
+
+--create dispaly score cell string, considering 'separator'
+-- for display or CSV only
+function getSetScoreStr(i,j,sep)
+    retval = ""
+    reverse = i>j
+    
+    --special case
+    if i==j then
+        return sep..sep
+    end
+    
+    if reverse then
+        tmp=i
+        i=j
+        j=tmp
+    end
+    tmp1a = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(i)]
+    tmp1b = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(j)]
+    tmp2a = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(i)]
+    tmp2b = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(j)]
+    tmp3a = scores[getTeamId(i)..getTeamId(j).."3"..getTeamId(i)]
+    tmp3b = scores[getTeamId(i)..getTeamId(j).."3"..getTeamId(j)]
+    
+    if tmp1a ~= nil and tmp1b ~= nil then
+        if reverse==false then
+            retval = tmp1a.."-"..tmp1b
+        else
+            retval = tmp1b.."-"..tmp1a
+        end
+    end
+    if tmp2a ~= nil and tmp2b ~= nil then
+        if reverse==false then
+            retval = retval..sep..tmp2a.."-"..tmp2b
+        else
+            retval = retval..sep..tmp2b.."-"..tmp2a
+        end
+    else
+        retval = retval..sep
+    end
+    if tmp3a ~= nil and tmp3b ~= nil then
+        if tmp3a~=0 or tmp3b~=0 then
+            if reverse==false then
+                retval = retval..sep..tmp3a.."-"..tmp3b
+            else
+                retval = retval..sep..tmp3b.."-"..tmp3a
+            end
+        end
+    else
+        retval = retval..sep
+    end
+    return retval
+end
+
+--convert 1,2,3... team number to A,B,C...
+-- because primitive storage system, using Dictionary index
+function getTeamId(i)
+    teamOrder = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"}
+    return teamOrder[i]
+end
+
+function getTeamName(i)
+    return teamName[i]
+end
+
+function loadScores(max)
+    for i=1,max,1 do 
+        for j=i+1,max,1 do
+            for set=1,3 do
+                loc = getTeamId(i)..getTeamId(j)..set..getTeamId(i)
+                scores[loc] = readLocalData(loc)
+                loc = getTeamId(i)..getTeamId(j)..set..getTeamId(j)
+                scores[loc] = readLocalData(loc)
+            end
+        end
+    end
+end
+
+
+■4
+
+卓球ソース4
+--member variables
+visibleSumUp = false
+sumMatrix = {}
+
+--switch function when SumButton is pushed
+function sumUp()
+    --calculate sum up
+    createSumMatrix()
+    
+    --create CSV data
+    csvStr = createCSVDataString()
+    
+    --export CSV data out to the defined data file
+    saveProjectTab("Data:ExportedCSV", csvStr)
+    
+    --switch display flag on
+    visibleSumUp = true
+end
+
+--calculate win-lose matrix : contains;
+-- team number
+-- win match count
+-- win set count
+-- win-lose order
+-- win point
+function createSumMatrix()
+    for i=1,teamcount do
+        sumMatrix[i] = {team=i, 
+                winCnt=getTotalWinMatchCount(i), 
+                winSetCnt=getRealTotalWinSetCount(i),
+                order=0,
+                point=0}
+    end
+    
+    --calculate team win order
+    table.sort(sumMatrix, compfuncWinOrder)
+    --record calculated order
+    for i=1,teamcount do
+        sumMatrix[i].order = i
+    end
+    
+    --recover team id order
+    table.sort(sumMatrix, compfuncTeamOrder)
+    
+    --calculate team point
+    for i=1,teamcount do
+        sumMatrix[i].point = sumMatrix[i].winCnt
+                +sumMatrix[i].winSetCnt
+                +(teamcount-sumMatrix[i].order+1)
+    end
+end
+
+--calculate winner order (1 is top winner)
+-- this is sort sub function
+function compfuncWinOrder(a,b)
+    if a.winCnt > b.winCnt then
+        return true
+    elseif a.winCnt == b.winCnt then
+        if a.winSetCnt > b.winSetCnt then
+            return true
+        elseif a.winSetCnt == b.winSetCnt then
+            tmp = getWinSetCnt(a.team,b.team,3)
+            if tmp[1] > 2 then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+--recover team number order in matrix
+-- this is used after win order is calculated and recorded in the matrix
+-- this is sort sub function
+function compfuncTeamOrder(a,b)
+    if a.team < b.team then
+        return true
+    end
+    return false
+end
+
+--display sumMatrix info onto screen
+function displaySumUp()
+    local w = WIDTH / (teamcount+1)
+    local h = HEIGHT / (teamcount+1)
+    textWrapWidth(WIDTH)
+    
+    if visibleSumUp then
+        for i=1,teamcount+1 do
+            --draw transparent mesh on score table as background
+            x, y = w, (teamcount-i+1)*h
+            fill(0, 0, 0, 125)
+            rect(x, y, WIDTH-w, h)
+            
+            if i>1 then
+            --draw SumUp info on the background
+            fill(255, 255, 255, 255)
+            fontSize(40)
+            text(sumMatrix[i-1].winCnt.."勝", x+w, y+h/2)
+            fontSize(25)
+            text(sumMatrix[i-1].winSetCnt.."セット", x+w*3, y+h/2)
+            fontSize(40)
+            
+            if sumMatrix[i-1].order==1 then
+                fill(255, 254, 0, 255)
+            end
+            text(sumMatrix[i-1].order.."位", x+w*5, y+h/2)
+            fontSize(25)
+            text(sumMatrix[i-1].point.."point", x+w*7, y+h/2)
+            end
+        end
+    end
+end
+function HideSumUp()
+    visibleSumUp = false
+end
+
+--calculate total win match count
+function getTotalWinMatchCount(team)
+    winMatch = 0
+    for i=1,teamcount,1 do
+        vicInfo=getWinSetCnt(team,i,3)
+        if vicInfo[1] >= 2 then
+            winMatch = winMatch + 1
+        end
+    end
+    return winMatch
+end
+
+--calculate total win set count, excluding 3rd set
+function getRealTotalWinSetCount(team)
+    winSet = 0
+    for i=1,teamcount,1 do
+        vicInfo = getWinSetCnt(team,i,2)
+        winSet = winSet + vicInfo[1]
+    end
+    return winSet
+end
+
+--create CSV data string
+function createCSVDataString()
+    ret = ""
+    --create whole string
+    for i=1,teamcount do
+        tmp = getTeamName(i)..","
+        for j=1,teamcount do
+            tmp = tmp..getSetScoreStr(i,j,",")..","
+        end
+        tmp = tmp..sumMatrix[i].winCnt..","
+        tmp = tmp..sumMatrix[i].winSetCnt..","
+        tmp = tmp..sumMatrix[i].order..","
+        tmp = tmp..sumMatrix[i].point
+        
+        ret = ret.."\n"..tmp
+    end
+    return ret
+end

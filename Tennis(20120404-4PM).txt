@@ -1,0 +1,189 @@
+-- Use this function to perform your initial setup
+function setup()
+    scores = {}
+    pattern = {}
+    
+    teamcount=8  --readLocalData("teamCount")
+
+    parameter.integer("set1a",0,20,0,function(x) updateScore() end)
+    parameter.integer("set1b",0,20,0,function(x) updateScore() end)
+    parameter.integer("set2a",0,20,0,function(x) updateScore() end)
+    parameter.integer("set2b",0,20,0,function(x) updateScore() end)
+    parameter.integer("set3a",0,20)
+    parameter.integer("set3b",0,20)
+    
+    parameter.integer("teama",0,10)
+    parameter.integer("teamb",0,10)
+    
+    loadScores(teamcount)
+ 
+    -- Read the main tab in a different project
+    dataTab = readProjectTab("Depot:Tennis")
+
+    -- fill the pattern with empties to begin with
+    for i = 1, teamcount do
+        pattern[i] = {}
+        for j = 1, teamcount do
+            pattern[i][j] = false
+        end
+    end
+end
+
+-- This function gets called once every frame
+function draw()
+    background(0,0,0,255)
+
+    local w = WIDTH / teamcount
+    local h = HEIGHT / teamcount
+    
+    -- text format
+    font("HelveticaNeue-CondensedBlack")
+    textWrapWidth(w)
+    
+    for i=1,teamcount do
+        for j=1,teamcount do
+            x, y = (j-1)*w, (teamcount-i)*h
+            noStroke();
+            if pattern[i][j] then
+                fill(185, 185, 185, 255)
+            elseif i==j then
+                fill(112, 112, 113, 255)
+            else
+                fill(216, 216, 216, 255)
+            end
+            rect(x, y, w, h)
+            
+            if j>i then
+                vic=getVict(i,j)
+                if vic>=2 then fill(121, 142, 225, 255)
+                else fill(225, 128, 121, 255) end
+                fontSize(40)
+                text(vic, x+w/5, y+h/2)
+                fontSize(18)
+                text(getScoreStr(i,j), x+w*2/3, y+h/2)
+            end
+        end
+    end
+    if CurrentTouch.state == BEGAN and not touchHandled then
+        touchHandled = true
+        checkFingerDown(CurrentTouch.x, CurrentTouch.y)
+    elseif CurrentTouch.state == ENDED then
+        touchHandled = false
+    end
+end
+
+
+function checkFingerDown(x, y)
+    print("fingerDowm")
+    -- clear flags
+    for i=0,teamcount-1,1 do
+        for j=0,teamcount-1,1 do
+            pattern[i+1][j+1] = false
+        end
+    end
+    
+    -- convert the finger to the grid location
+    print(x,y)
+    x = math.floor(x/WIDTH*teamcount)
+    y = math.floor((HEIGHT-y)/HEIGHT*teamcount)
+    if pattern[y+1][x+1] then
+        pattern[y+1][x+1] = false
+        teama = 0
+        teamb = 0
+    elseif x~=y then
+        pattern[y+1][x+1] = true
+        teama = y+1
+        teamb = x+1
+    end
+    
+    refreshParams()
+end
+
+function refreshParams()
+    if teama==nil or teamb==nil then return end
+    if teama==0 or teamb==0 then return end
+    set1a = scores[getTeamId(teama)..getTeamId(teamb).."1"..getTeamId(teama)]
+    set1b = scores[getTeamId(teama)..getTeamId(teamb).."1"..getTeamId(teamb)]
+    set2a = scores[getTeamId(teama)..getTeamId(teamb).."2"..getTeamId(teama)]
+    set2b = scores[getTeamId(teama)..getTeamId(teamb).."2"..getTeamId(teamb)]
+    --print(set1a.."-"..set1b)
+end
+
+function updateScore()
+    --print("updateScore")
+    if teama==0 or teamb==0 or teamb==teama then return end
+    
+    if teama < teamb then
+        scores[getTeamId(teama)..getTeamId(teamb).."1"..getTeamId(teama)] = set1a
+        saveLocalData(getTeamId(teama)..getTeamId(teamb).."1"..getTeamId(teama), set1a)
+        scores[getTeamId(teama)..getTeamId(teamb).."1"..getTeamId(teamb)] = set1b
+        saveLocalData(getTeamId(teama)..getTeamId(teamb).."1"..getTeamId(teamb), set1b)
+        
+        scores[getTeamId(teama)..getTeamId(teamb).."2"..getTeamId(teama)] = set2a
+        saveLocalData(getTeamId(teama)..getTeamId(teamb).."2"..getTeamId(teama), set2a)
+        scores[getTeamId(teama)..getTeamId(teamb).."2"..getTeamId(teamb)] = set2b
+        saveLocalData(getTeamId(teama)..getTeamId(teamb).."2"..getTeamId(teamb), set2b)
+    end
+    --print(set1a.."-"..set1b)
+    --print(set2a.."-"..set2b)
+end
+
+function getVict(i,j)
+    retval = 0
+    tmp1a = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(i)]
+    tmp1b = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(j)]
+    tmp2a = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(i)]
+    tmp2b = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(j)]
+    tmp3a = scores[getTeamId(i)..getTeamId(j).."3"..getTeamId(i)]
+    tmp3b = scores[getTeamId(i)..getTeamId(j).."3"..getTeamId(j)]
+    
+    if tmp1a~=nil and tmp1b~=nil and tmp1a > tmp1b then
+        retval = retval + 1
+    end
+    if tmp2a~=nil and tmp2b~=nil and tmp2a > tmp2b then
+        retval = retval + 1
+    end
+    if tmp3a~=nil and tmp3b~=nil and tmp3a > tmp3b then
+        retval = retval + 1
+    end
+    return retval
+end
+
+function getScoreStr(i,j)
+    retval = ""
+    tmp1a = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(i)]
+    tmp1b = scores[getTeamId(i)..getTeamId(j).."1"..getTeamId(j)]
+    tmp2a = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(i)]
+    tmp2b = scores[getTeamId(i)..getTeamId(j).."2"..getTeamId(j)]
+    
+    if tmp1a ~= nil and tmp1b ~= nil then
+        retval = tmp1a.."-"..tmp1b
+    end
+    if tmp2a ~= nil and tmp2b ~= nil then
+        retval = retval.."\n"..tmp2a.."-"..tmp2b
+    end
+    --print(retval)
+    return retval
+end
+
+function getTeamId(i)
+    teamOrder = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"}
+    -- print(teamOrder[i])
+    return teamOrder[i]
+end
+
+function loadScores(max)
+    for i=1,max,1 do 
+        for j=i+1,max,1 do
+            loc = getTeamId(i)..getTeamId(j).."1"..getTeamId(i)
+            scores[loc] = readLocalData(loc)
+            loc = getTeamId(i)..getTeamId(j).."1"..getTeamId(j)
+            scores[loc] = readLocalData(loc)
+    
+            loc = getTeamId(i)..getTeamId(j).."2"..getTeamId(i)
+            scores[loc] = readLocalData(loc)
+            loc = getTeamId(i)..getTeamId(j).."2"..getTeamId(j)
+            scores[loc] = readLocalData(loc)
+        end
+    end
+end
